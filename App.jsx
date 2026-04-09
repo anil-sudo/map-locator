@@ -18,47 +18,84 @@ const App = () => {
     <>
       <style>
         {`
+          @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&family=DM+Serif+Display&display=swap');
+
+          body {
+            font-family: 'DM Sans', sans-serif;
+            margin: 0;
+            padding: 0;
+          }
+
           .navbar {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            background-color: #F5F4F0;
-            padding: 10px;
+            background-color: #0A3161;
+            color: white;
+            padding: 15px 20px;
             z-index: 1000;
-            font-weight: bold;
+            font-family: 'DM Serif Display', serif;
+            font-size: 1.2em;
+            font-weight: 400;
           }
+
           .main-container {
             display: flex;
-            margin-top: 50px; /* Adjust based on navbar height */
-            height: calc(100vh - 50px);
+            margin-top: 60px; /* Adjusted for navbar height */
+            height: calc(100vh - 60px);
             background-color: #F5F4F0;
           }
+
           .sidebar {
             width: 360px;
             background-color: #F5F4F0;
-            padding: 10px;
+            padding: 20px;
             overflow-y: auto;
           }
+
           .map-container {
             flex: 1;
             background-color: #F5F4F0;
           }
+
           .office-card {
             background: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 10px;
-            margin-bottom: 10px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: box-shadow 0.2s ease;
           }
+
+          .office-card:hover {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+          }
+
           .office-name {
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            font-size: 1.1em;
           }
-          .office-type {
-            color: #666;
-            font-size: 0.9em;
+
+          .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
+          .hq {
+            background-color: #0A3161;
+            color: white;
+          }
+
+          .branch {
+            background-color: #28a745;
+            color: white;
           }
         `}
       </style>
@@ -70,7 +107,7 @@ const App = () => {
           {offices.map((office, index) => (
             <div key={index} className="office-card">
               <div className="office-name">{office.name}</div>
-              <div className="office-type">{office.type}</div>
+              <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>
             </div>
           ))}
         </div>

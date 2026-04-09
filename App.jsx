@@ -33,8 +33,14 @@ const App = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 220);
 
-  const filteredOffices = offices.filter(office =>
+  const [filter, setFilter] = useState('all');
+
+  const searchedOffices = offices.filter(office =>
     office.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+  );
+
+  const filteredOffices = searchedOffices.filter(office =>
+    filter === 'all' || office.type.toLowerCase() === filter
   );
 
   return (
@@ -92,6 +98,32 @@ const App = () => {
             box-sizing: border-box;
           }
 
+          .filter-buttons {
+            margin-bottom: 15px;
+          }
+
+          .filter-button {
+            padding: 8px 12px;
+            margin-right: 8px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.9em;
+          }
+
+          .filter-button.active {
+            background: #0A3161;
+            color: white;
+            border-color: #0A3161;
+          }
+
+          .result-count {
+            margin-bottom: 15px;
+            font-size: 0.9em;
+            color: #666;
+          }
+
           .office-card {
             background: white;
             border-radius: 8px;
@@ -144,6 +176,12 @@ const App = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+          <div className="filter-buttons">
+            <button className={`filter-button ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</button>
+            <button className={`filter-button ${filter === 'branch' ? 'active' : ''}`} onClick={() => setFilter('branch')}>Branch</button>
+            <button className={`filter-button ${filter === 'hq' ? 'active' : ''}`} onClick={() => setFilter('hq')}>HQ</button>
+          </div>
+          <div className="result-count">Showing {filteredOffices.length} of {offices.length}</div>
           {filteredOffices.map((office, index) => (
             <div key={index} className="office-card">
               <div className="office-name">{office.name}</div>

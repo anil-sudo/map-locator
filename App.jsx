@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const App = () => {
   const offices = [
@@ -13,6 +13,29 @@ const App = () => {
     { name: "Brussels Branch", type: "Branch" },
     { name: "Copenhagen Branch", type: "Branch" }
   ];
+
+  const useDebounce = (value, delay) => {
+    const [debouncedValue, setDebouncedValue] = useState(value);
+
+    useEffect(() => {
+      const handler = setTimeout(() => {
+        setDebouncedValue(value);
+      }, delay);
+
+      return () => {
+        clearTimeout(handler);
+      };
+    }, [value, delay]);
+
+    return debouncedValue;
+  };
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 220);
+
+  const filteredOffices = offices.filter(office =>
+    office.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+  );
 
   return (
     <>
@@ -57,6 +80,16 @@ const App = () => {
           .map-container {
             flex: 1;
             background-color: #F5F4F0;
+          }
+
+          .search-input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1em;
+            box-sizing: border-box;
           }
 
           .office-card {
@@ -104,7 +137,14 @@ const App = () => {
       </nav>
       <div className="main-container">
         <div className="sidebar">
-          {offices.map((office, index) => (
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Search offices..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          {filteredOffices.map((office, index) => (
             <div key={index} className="office-card">
               <div className="office-name">{office.name}</div>
               <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>

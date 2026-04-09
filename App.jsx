@@ -2,16 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const App = () => {
   const offices = [
-    { name: "London HQ", type: "HQ" },
-    { name: "Paris Branch", type: "Branch" },
-    { name: "Berlin Branch", type: "Branch" },
-    { name: "Amsterdam Branch", type: "Branch" },
-    { name: "Zurich Branch", type: "Branch" },
-    { name: "Milan Branch", type: "Branch" },
-    { name: "Madrid Branch", type: "Branch" },
-    { name: "Vienna Branch", type: "Branch" },
-    { name: "Brussels Branch", type: "Branch" },
-    { name: "Copenhagen Branch", type: "Branch" }
+    { name: "London HQ", type: "HQ", lat: 51.5074, lng: -0.1278 },
+    { name: "Paris Branch", type: "Branch", lat: 48.8566, lng: 2.3522 },
+    { name: "Berlin Branch", type: "Branch", lat: 52.5200, lng: 13.4050 },
+    { name: "Amsterdam Branch", type: "Branch", lat: 52.3676, lng: 4.9041 },
+    { name: "Zurich Branch", type: "Branch", lat: 47.3769, lng: 8.5417 },
+    { name: "Milan Branch", type: "Branch", lat: 45.4642, lng: 9.1900 },
+    { name: "Madrid Branch", type: "Branch", lat: 40.4168, lng: -3.7038 },
+    { name: "Vienna Branch", type: "Branch", lat: 48.2082, lng: 16.3738 },
+    { name: "Brussels Branch", type: "Branch", lat: 50.8503, lng: 4.3517 },
+    { name: "Copenhagen Branch", type: "Branch", lat: 55.6761, lng: 12.5683 }
   ];
 
   const useLeaflet = () => {
@@ -75,6 +75,59 @@ const App = () => {
   }, [filteredOffices]);
 
   const visibleOffices = filteredOffices.slice(0, visibleCount);
+
+  const useLeaflet = () => {
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    useEffect(() => {
+      if (window.L) {
+        setIsLoaded(true);
+        return;
+      }
+
+      // Load CSS
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(css);
+
+      // Load JS
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => setIsLoaded(true);
+      document.head.appendChild(script);
+    }, []);
+
+    return isLoaded;
+  };
+
+  const isLeafletLoaded = useLeaflet();
+  const mapRef = useRef(null);
+  const markersRef = useRef([]);
+
+  useEffect(() => {
+    if (isLeafletLoaded && mapRef.current && !mapRef.current._map) {
+      const map = window.L.map(mapRef.current).setView([50, 10], 4);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+
+      markersRef.current = offices.map(office => {
+        const iconHtml = office.type === 'HQ' 
+          ? '<div style="width: 20px; height: 20px; background: #0A3161; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>'
+          : '<div style="width: 12px; height: 12px; background: #28a745; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>';
+        const icon = window.L.divIcon({
+          html: iconHtml,
+          className: 'custom-marker',
+          iconSize: office.type === 'HQ' ? [20, 20] : [12, 12],
+          iconAnchor: office.type === 'HQ' ? [10, 10] : [6, 6]
+        });
+        return window.L.marker([office.lat, office.lng], { icon }).addTo(map);
+      });
+
+      mapRef.current._map = map;
+    }
+  }, [isLeafletLoaded]);
 
   return (
     <>
@@ -168,6 +221,11 @@ const App = () => {
             cursor: pointer;
             border-radius: 4px;
             font-size: 0.9em;
+          }
+
+          .custom-marker {
+            background: none;
+            border: none;
           }
 
           .office-card {

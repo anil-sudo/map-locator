@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 const offices = [
   { name: "Standard Chartered London Head Office", latitude: 51.5074, longitude: -0.1278, type: "HQ", contacts: [{ type: "phone", value: "+44 20 7885 8888" }, { type: "email", value: "london.hq@sc.com" }] },
@@ -24,31 +26,6 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-const useLeaflet = () => {
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  useEffect(() => {
-    if (window.L) {
-      setIsLoaded(true);
-      return;
-    }
-
-    // Load CSS
-    const css = document.createElement('link');
-    css.rel = 'stylesheet';
-    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(css);
-
-    // Load JS
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.onload = () => setIsLoaded(true);
-    document.head.appendChild(script);
-  }, []);
-
-  return isLoaded;
-};
-
 const useDebounce = (value, delay) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
 
@@ -71,15 +48,16 @@ const App = () => {
   const [visibleCount, setVisibleCount] = useState(4);
   const [userLocation, setUserLocation] = useState(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map' for mobile
 
+  const mapContainer = useRef(null);
+  const sidebarRef = useRef(null);
   const mapRef = useRef(null);
-  const markersRef = useRef([]);
+  const markersRef = useRef({});
   const cardRefs = useRef([]);
   const userMarkerRef = useRef(null);
+  const popupRef = useRef(null);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 220);
-  const isLeafletLoaded = useLeaflet();
 
   const officesWithDistance = useMemo(() => {
     if (!userLocation) return offices;
@@ -103,72 +81,155 @@ const App = () => {
 
   useEffect(() => {
     setVisibleCount(4);
+    // Close popup if the currently highlighted office is filtered out
+    if (highlightedIndex !== -1) {
+      const highlightedOffice = offices[highlightedIndex];
+      if (!filteredOffices.some(o => o.name === highlightedOffice.name)) {
+        if (popupRef.current) {
+          popupRef.current.remove();
+          popupRef.current = null;
+        }
+        setHighlightedIndex(-1);
+      }
+    }
   }, [filteredOffices]);
 
   const visibleOffices = filteredOffices.slice(0, visibleCount);
 
-  // Initialize Map
+  // Initialize MapCN (MapLibre GL)
   useEffect(() => {
-    if (isLeafletLoaded && mapRef.current && !mapRef.current._map) {
-      const map = window.L.map(mapRef.current).setView([50, 10], 4);
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(map);
+    if (mapRef.current) return;
 
-      markersRef.current = offices.map((office, officeIndex) => {
-        const iconHtml = office.type === 'HQ' 
-          ? '<div style="width: 20px; height: 20px; background: #0A3161; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>'
-          : '<div style="width: 12px; height: 12px; background: #28a745; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>';
-        const icon = window.L.divIcon({
-          html: iconHtml,
-          className: 'custom-marker',
-          iconSize: office.type === 'HQ' ? [20, 20] : [12, 12],
-          iconAnchor: office.type === 'HQ' ? [10, 10] : [6, 6]
-        });
-        const marker = window.L.marker([office.latitude, office.longitude], { icon }).addTo(map);
-        
-        const popupContent = `
-          <div style="font-family: 'DM Sans', sans-serif; min-width: 250px; font-size: 14px;">
-            <div style="background: #0A3161; color: white; padding: 10px; font-weight: bold; border-radius: 6px 6px 0 0; font-size: 16px;">
-              ${office.name}
-            </div>
-            <div style="background: white; padding: 12px; border-radius: 0 0 6px 6px; line-height: 1.4;">
-              <div style="margin-bottom: 8px;"><strong>Type:</strong> ${office.type}</div>
-              ${office.contacts.map(contact => `<div style="margin-bottom: 4px;"><strong>${contact.type.charAt(0).toUpperCase() + contact.type.slice(1)}:</strong> ${contact.value}</div>`).join('')}
-            </div>
-          </div>
-        `;
-        
-        marker.bindPopup(popupContent);
-        marker.on('click', () => {
-          setHighlightedIndex(officeIndex);
-          cardRefs.current[officeIndex]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        });
-        return marker;
-      });
+    const map = new maplibregl.Map({
+      container: mapContainer.current,
+      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      center: [10, 50],
+      zoom: 4,
+    });
 
-      mapRef.current._map = map;
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    map.on('load', () => {
+      mapRef.current = map;
+      updateMarkers();
+    });
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
+
+  const scrollToMap = () => {
+    if (window.innerWidth <= 680) {
+      mapContainer.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [isLeafletLoaded]);
+  };
 
-  // Update Markers visibility
+  const scrollToSidebar = () => {
+    if (window.innerWidth <= 680) {
+      sidebarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const openOfficePopup = (office, globalIndex) => {
+    if (!mapRef.current) return;
+
+    // Remove existing popup if any
+    if (popupRef.current) {
+      popupRef.current.remove();
+    }
+
+    setHighlightedIndex(globalIndex);
+
+    const popupHTML = `
+      <div style="font-family: 'DM Sans', sans-serif; min-width: 220px;">
+        <div style="background: #0A3161; color: white; padding: 12px; font-weight: bold; border-radius: 8px 8px 0 0; font-size: 14px;">
+          ${office.name}
+        </div>
+        <div style="background: white; padding: 15px; border-radius: 0 0 8px 8px; border: 1px solid #eee; border-top: none;">
+          <div style="margin-bottom: 10px;"><span style="color: #666; font-size: 11px; text-transform: uppercase; font-weight: bold; display: block;">Office Type</span><strong>${office.type}</strong></div>
+          ${office.contacts.map(c => `
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+              <span style="font-size: 13px;">${c.type === 'phone' ? '📞' : '✉️'}</span>
+              <span style="font-size: 13px; color: #444;">${c.value}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    const newPopup = new maplibregl.Popup({ offset: 25, closeOnClick: false })
+      .setLngLat([office.longitude, office.latitude])
+      .setHTML(popupHTML)
+      .addTo(mapRef.current);
+
+    newPopup.on('close', () => {
+      popupRef.current = null;
+    });
+
+    popupRef.current = newPopup;
+  };
+
+  const updateMarkers = () => {
+    if (!mapRef.current) return;
+
+    // Remove existing markers that are not in the current filtered list
+    Object.keys(markersRef.current).forEach(name => {
+      if (!filteredOffices.some(o => o.name === name)) {
+        markersRef.current[name].remove();
+        delete markersRef.current[name];
+      }
+    });
+
+    // Add or update markers
+    filteredOffices.forEach((office) => {
+      const globalIndex = offices.findIndex(o => o.name === office.name);
+      const isActive = highlightedIndex === globalIndex;
+      
+      if (!markersRef.current[office.name]) {
+        const el = document.createElement('div');
+        el.className = 'custom-marker';
+        
+        // Define marker styles based on office type
+        const size = office.type === 'HQ' ? '24px' : '16px';
+        const color = office.type === 'HQ' ? '#0A3161' : '#1A6B3C';
+        
+        el.innerHTML = `<div style="width: ${size}; height: ${size}; background: ${color}; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 5px rgba(0,0,0,0.3); transition: all 0.3s ease;"></div>`;
+
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([office.longitude, office.latitude])
+          .addTo(mapRef.current);
+
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openOfficePopup(office, globalIndex);
+          cardRefs.current[globalIndex]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          scrollToMap();
+        });
+
+        markersRef.current[office.name] = marker;
+      }
+
+      // Update active state style
+      const markerEl = markersRef.current[office.name].getElement().firstChild;
+      if (isActive) {
+        markerEl.style.background = '#00A0DC';
+        markerEl.style.boxShadow = '0 0 10px #00A0DC';
+        markerEl.style.transform = 'scale(1.2)';
+      } else {
+        markerEl.style.background = office.type === 'HQ' ? '#0A3161' : '#1A6B3C';
+        markerEl.style.boxShadow = '0 0 5px rgba(0,0,0,0.3)';
+        markerEl.style.transform = 'scale(1)';
+      }
+    });
+  };
+
   useEffect(() => {
-    if (isLeafletLoaded && mapRef.current && mapRef.current._map) {
-      offices.forEach((office, index) => {
-        const marker = markersRef.current[index];
-        const isVisible = filteredOffices.some(filtered => filtered.name === office.name);
-        if (isVisible) {
-          if (!mapRef.current._map.hasLayer(marker)) {
-            marker.addTo(mapRef.current._map);
-          }
-        } else {
-          if (mapRef.current._map.hasLayer(marker)) {
-            mapRef.current._map.removeLayer(marker);
-          }
-        }
-      });
-    }
-  }, [filteredOffices, isLeafletLoaded]);
+    updateMarkers();
+  }, [filteredOffices, highlightedIndex]);
 
   const handleLocationClick = () => {
     if (navigator.geolocation) {
@@ -176,52 +237,42 @@ const App = () => {
         (position) => {
           const { latitude, longitude } = position.coords;
           setUserLocation({ lat: latitude, lng: longitude });
-          if (mapRef.current._map) {
-            mapRef.current._map.flyTo([latitude, longitude], 13);
+          
+          if (mapRef.current) {
+            mapRef.current.flyTo({
+              center: [longitude, latitude],
+              zoom: 12,
+              essential: true
+            });
+
+            if (userMarkerRef.current) userMarkerRef.current.remove();
+
+            const el = document.createElement('div');
+            el.className = 'pulsing-user-marker';
+            
+            userMarkerRef.current = new maplibregl.Marker({ element: el })
+              .setLngLat([longitude, latitude])
+              .addTo(mapRef.current);
+            
+            scrollToMap();
           }
-          if (userMarkerRef.current) {
-            mapRef.current._map.removeLayer(userMarkerRef.current);
-          }
-          const userIcon = window.L.divIcon({
-            html: '<div class="pulsing-marker"></div>',
-            className: 'custom-marker',
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-          });
-          userMarkerRef.current = window.L.marker([latitude, longitude], { icon: userIcon }).addTo(mapRef.current._map);
         },
-        (error) => {
-          console.error('Geolocation error:', error);
-          alert('Unable to get your location. Please check your browser settings.');
-        }
+        (error) => alert('Unable to retrieve location.')
       );
-    } else {
-      alert('Geolocation is not supported by this browser.');
     }
   };
 
   const handleCardClick = (office, globalIndex) => {
-    setHighlightedIndex(globalIndex);
-    const isMobile = window.innerWidth <= 680;
-    
-    if (isMobile) {
-      setViewMode('map');
+    if (mapRef.current) {
+      mapRef.current.flyTo({
+        center: [office.longitude, office.latitude],
+        zoom: 14,
+        speed: 1.2,
+        curve: 1.1
+      });
+      openOfficePopup(office, globalIndex);
+      scrollToMap();
     }
-
-    // Use a slightly longer timeout to wait for the CSS transition (0.3s)
-    setTimeout(() => {
-      if (mapRef.current._map) {
-        // Essential: tell Leaflet the container size might have changed
-        mapRef.current._map.invalidateSize();
-        
-        mapRef.current._map.flyTo([office.latitude, office.longitude], 14, {
-          animate: true,
-          duration: 1.5
-        });
-        
-        markersRef.current[globalIndex].openPopup();
-      }
-    }, isMobile ? 350 : 50);
   };
 
   return (
@@ -235,6 +286,7 @@ const App = () => {
             margin: 0;
             padding: 0;
             overflow: hidden;
+            background: #F5F4F0;
           }
 
           .navbar {
@@ -244,158 +296,78 @@ const App = () => {
             right: 0;
             background-color: #0A3161;
             color: white;
-            padding: 15px 20px;
+            padding: 0 24px;
             z-index: 2000;
             font-family: 'DM Serif Display', serif;
-            font-size: 1.2em;
-            font-weight: 400;
-            height: 60px;
-            box-sizing: border-box;
+            height: 64px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-          }
-
-          .nav-title-desktop { display: inline; }
-          .nav-title-mobile { display: none; }
-
-          @media (max-width: 600px) {
-            .nav-title-desktop { display: none; }
-            .nav-title-mobile { display: inline; }
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
           }
 
           .main-container {
             display: flex;
-            margin-top: 60px;
-            height: calc(100vh - 60px);
-            box-sizing: border-box;
+            margin-top: 64px;
+            height: calc(100vh - 64px);
             background-color: #F5F4F0;
-            position: relative;
           }
 
           .sidebar {
             width: 360px;
             background-color: #F5F4F0;
             overflow-y: auto;
-            position: relative;
+            border-right: 1px solid rgba(0,0,0,0.08);
             z-index: 5;
-            transition: all 0.3s ease;
+            scroll-margin-top: 64px;
           }
 
           .sticky-header {
             position: sticky;
             top: 0;
             background-color: #F5F4F0;
-            padding: 20px 20px 10px 20px;
+            padding: 24px;
             z-index: 10;
-            border-bottom: 1px solid rgba(0,0,0,0.05);
-          }
-
-          .list-content {
-            padding: 10px 20px 80px 20px;
-          }
-
-          .map-container {
-            flex: 1;
-            background-color: #F5F4F0;
-            height: 100%;
-            position: relative;
-            z-index: 1;
-          }
-
-          .view-toggle {
-            display: none;
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 3000;
-            background: #0A3161;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 30px;
-            font-weight: 700;
-            font-size: 0.9em;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            cursor: pointer;
-            align-items: center;
-            gap: 8px;
-            transition: transform 0.2s active;
-          }
-
-          .view-toggle:active {
-            transform: translateX(-50%) scale(0.95);
-          }
-
-          @media (max-width: 680px) {
-            .view-toggle { display: flex; }
-            
-            .sidebar {
-              position: absolute;
-              top: 0;
-              left: 0;
-              width: 100% !important;
-              height: 100%;
-              transform: translateX(${viewMode === 'list' ? '0' : '-100%'});
-              visibility: ${viewMode === 'list' ? 'visible' : 'hidden'};
-            }
-
-            .map-container {
-              position: absolute;
-              top: 0;
-              left: 0;
-              width: 100%;
-              height: 100%;
-              transform: translateX(${viewMode === 'map' ? '0' : '100%'});
-              visibility: ${viewMode === 'map' ? 'visible' : 'hidden'};
-            }
-          }
-
-          .map-chip {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: white;
-            padding: 8px 16px;
-            border-radius: 30px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            font-size: 0.85em;
-            font-weight: 700;
-            z-index: 1000;
-            white-space: nowrap;
+            backdrop-filter: blur(8px);
           }
 
           .search-input {
             width: 100%;
-            padding: 12px 16px;
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 1em;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            border: 1px solid #E0DED7;
+            border-radius: 12px;
+            font-size: 15px;
+            background: white;
             box-sizing: border-box;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            transition: all 0.2s;
+          }
+          
+          .search-input:focus {
+            outline: none;
+            border-color: #0A3161;
+            box-shadow: 0 0 0 3px rgba(10, 49, 97, 0.1);
           }
 
           .filter-buttons {
             display: flex;
             gap: 8px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             overflow-x: auto;
-            padding-bottom: 5px;
           }
 
           .filter-button {
-            padding: 8px 16px;
-            border: 1px solid #ddd;
+            padding: 10px 20px;
+            border: 1px solid #E0DED7;
             background: white;
             cursor: pointer;
             border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: 500;
-            transition: all 0.2s ease;
+            font-size: 13px;
+            font-weight: 700;
+            transition: all 0.2s;
             white-space: nowrap;
+            color: #555;
           }
 
           .filter-button.active {
@@ -404,97 +376,174 @@ const App = () => {
             border-color: #0A3161;
           }
 
-          .location-button-map {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px;
-            border: none;
-            background: white;
-            color: #0A3161;
-            cursor: pointer;
-            border-radius: 50%;
-            width: 45px;
-            height: 45px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000;
-          }
-
-          .location-icon {
-            width: 20px;
-            height: 20px;
-            fill: currentColor;
+          .list-content {
+            padding: 0 24px 100px 24px;
           }
 
           .office-card {
             background: white;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
             cursor: pointer;
             border: 2px solid transparent;
-            transition: all 0.2s ease;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
           }
 
           .office-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.06);
           }
 
           .office-card.highlighted {
-            border-color: #0A3161;
-            background: #f0f7ff;
+            border-color: #00A0DC;
+            background: #F0F9FF;
           }
 
           .office-name {
             font-weight: 700;
-            margin-bottom: 8px;
-            font-size: 1.05em;
+            margin-bottom: 10px;
+            font-size: 17px;
             color: #0A3161;
+            line-height: 1.3;
           }
 
           .badge {
             display: inline-block;
-            padding: 4px 10px;
+            padding: 4px 12px;
             border-radius: 6px;
-            font-size: 0.75em;
-            font-weight: 700;
+            font-size: 11px;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
           }
 
           .hq { background-color: #0A3161; color: white; }
-          .branch { background-color: #28a745; color: white; }
+          .branch { background-color: #1A6B3C; color: white; }
 
-          .pulsing-marker {
+          .map-container {
+            flex: 1;
+            height: 100%;
+            position: relative;
+            background: #E5E4DF;
+            scroll-margin-top: 64px;
+          }
+
+          .location-button {
+            position: absolute;
+            bottom: 32px;
+            right: 32px;
+            width: 52px;
+            height: 52px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            z-index: 1000;
+            color: #0A3161;
+            transition: all 0.2s;
+          }
+
+          .back-to-list-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: #0A3161;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 13px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000;
+            cursor: pointer;
+          }
+
+          .location-button:hover {
+            background: #F0F7FF;
+            transform: scale(1.05);
+          }
+
+          .pulsing-user-marker {
             width: 20px;
             height: 20px;
-            background: #007bff;
+            background: #00A0DC;
             border-radius: 50%;
-            border: 3px solid white;
-            box-shadow: 0 0 10px rgba(0,123,255,0.5);
-            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+            border: 4px solid white;
+            box-shadow: 0 0 10px rgba(0,160,220,0.5);
+            animation: pulse-ring 2s infinite;
           }
 
           @keyframes pulse-ring {
-            0% { transform: scale(.95); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); }
-            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); }
-            100% { transform: scale(.95); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); }
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 160, 220, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(0, 160, 220, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 160, 220, 0); }
+          }
+
+          /* Responsive Stack Layout */
+          @media (max-width: 680px) {
+            body {
+              overflow-y: auto;
+            }
+            .main-container {
+              flex-direction: column;
+              height: auto;
+              margin-top: 64px;
+            }
+            .sidebar {
+              width: 100%;
+              height: auto;
+              overflow-y: visible;
+              border-right: none;
+              order: 1;
+            }
+            .list-content {
+              padding-bottom: 40px;
+            }
+            .map-container {
+              width: 100%;
+              height: 500px;
+              order: 2;
+            }
+            .back-to-list-button {
+              display: flex;
+            }
+            .location-button {
+              bottom: 20px;
+              right: 20px;
+            }
+          }
+
+          .maplibregl-popup-content {
+            padding: 0;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+          }
+          .maplibregl-popup-close-button {
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-size: 18px;
           }
         `}
       </style>
 
       <nav className="navbar">
-        <span className="nav-title-desktop">SC | Standard Chartered — Branch Locator Europe</span>
-        <span className="nav-title-mobile">SC | Branch Locator</span>
-        <span style={{ fontSize: '0.8em', opacity: 0.9 }}>{offices.length} Locations</span>
+        <span style={{ fontSize: '1.2rem', fontWeight: 600 }}>SC | Branch Locator</span>
+        <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>{filteredOffices.length} Offices Found</span>
       </nav>
 
       <div className="main-container">
-        <div className="sidebar">
+        <div className="sidebar" ref={sidebarRef}>
           <div className="sticky-header">
             <input
               type="text"
@@ -508,8 +557,8 @@ const App = () => {
               <button className={`filter-button ${filter === 'branch' ? 'active' : ''}`} onClick={() => setFilter('branch')}>Branches</button>
               <button className={`filter-button ${filter === 'hq' ? 'active' : ''}`} onClick={() => setFilter('hq')}>Headquarters</button>
             </div>
-            <div style={{ fontSize: '0.85em', color: '#666', marginTop: '5px' }}>
-              Showing {visibleOffices.length} of {filteredOffices.length}
+            <div style={{ fontSize: '0.85rem', color: '#666', fontWeight: 600 }}>
+              Showing {visibleOffices.length} of {filteredOffices.length} results
             </div>
           </div>
 
@@ -524,17 +573,19 @@ const App = () => {
                   onClick={() => handleCardClick(office, globalIndex)}
                 >
                   <div className="office-name">{office.name}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>
                     {office.distance && (
-                      <span style={{ fontSize: '0.8em', color: '#666' }}>
-                        • {office.distance.toFixed(1)} km away
+                      <span style={{ fontSize: '0.8rem', color: '#666', fontWeight: 600 }}>
+                        {office.distance.toFixed(1)} km away
                       </span>
                     )}
                   </div>
                   {office.contacts.length > 0 && (
-                    <div style={{ marginTop: '10px', fontSize: '0.85em', color: '#555' }}>
-                      <div style={{ marginBottom: '2px' }}><strong>{office.contacts[0].type}:</strong> {office.contacts[0].value}</div>
+                    <div style={{ marginTop: '15px', color: '#444' }}>
+                      <div style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>📞</span> {office.contacts[0].value}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -542,35 +593,41 @@ const App = () => {
             })}
             
             {visibleCount < filteredOffices.length && (
-              <button className="load-more" onClick={() => setVisibleCount(prev => Math.min(prev + 4, filteredOffices.length))}>
+              <button 
+                onClick={() => setVisibleCount(prev => Math.min(prev + 4, filteredOffices.length))}
+                style={{ 
+                  width: '100%', 
+                  padding: '14px', 
+                  background: 'white', 
+                  border: '1px solid #ddd', 
+                  borderRadius: '12px', 
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  color: '#0A3161'
+                }}
+              >
                 Load more results
               </button>
             )}
           </div>
         </div>
 
-        <div className="map-container" ref={mapRef}>
-          <div className="map-chip">Map: {filteredOffices.length} Locations</div>
-          <button className="location-button-map" onClick={handleLocationClick} title="Zoom to my location">
-            <svg className="location-icon" viewBox="0 0 24 24">
-              <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+        <div className="map-container" ref={mapContainer}>
+          <button className="back-to-list-button" onClick={scrollToSidebar}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            Back to List
+          </button>
+          
+          <button className="location-button" onClick={handleLocationClick} title="My Location">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
             </svg>
           </button>
         </div>
-
-        <button className="view-toggle" onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}>
-          {viewMode === 'list' ? (
-            <>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
-              View Map
-            </>
-          ) : (
-            <>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-              View List
-            </>
-          )}
-        </button>
       </div>
     </>
   );

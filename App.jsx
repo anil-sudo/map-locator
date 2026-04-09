@@ -92,6 +92,24 @@ const App = () => {
 
   const visibleOffices = filteredOffices.slice(0, visibleCount);
 
+  useEffect(() => {
+    if (isLeafletLoaded && mapRef.current._map) {
+      markersRef.current.forEach((marker, index) => {
+        const office = offices[index];
+        const isVisible = filteredOffices.some(filtered => filtered.name === office.name);
+        if (isVisible) {
+          if (!mapRef.current._map.hasLayer(marker)) {
+            marker.addTo(mapRef.current._map);
+          }
+        } else {
+          if (mapRef.current._map.hasLayer(marker)) {
+            mapRef.current._map.removeLayer(marker);
+          }
+        }
+      });
+    }
+  }, [filteredOffices, isLeafletLoaded]);
+
   const handleLocationClick = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -246,6 +264,20 @@ const App = () => {
             flex: 1;
             background-color: #F5F4F0;
             height: 100%;
+            position: relative;
+          }
+
+          .map-chip {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            font-size: 0.9em;
+            font-weight: 500;
+            z-index: 1000;
           }
 
           .search-input {
@@ -425,7 +457,9 @@ const App = () => {
             </button>
           )}
         </div>
-        <div className="map-container" ref={mapRef}></div>
+        <div className="map-container" ref={mapRef}>
+          <div className="map-chip">Showing {filteredOffices.length} offices</div>
+        </div>
       </div>
     </>
   );

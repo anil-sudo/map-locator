@@ -104,6 +104,8 @@ const App = () => {
     setVisibleCount(4);
   }, [filteredOffices]);
 
+
+
   const visibleOffices = filteredOffices.slice(0, visibleCount);
 
   // Initialize Map
@@ -219,16 +221,22 @@ const App = () => {
             background-color: #0A3161;
             color: white;
             padding: 15px 20px;
-            z-index: 1000;
+            z-index: 2000;
             font-family: 'DM Serif Display', serif;
             font-size: 1.2em;
             font-weight: 400;
+            min-height: 60px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
           }
 
           .main-container {
             display: flex;
-            margin-top: 60px;
-            height: calc(100vh - 60px);
+            margin-top: 0;
+            padding-top: 70px; /* Increased to account for potential wrapping */
+            height: 100vh;
+            box-sizing: border-box;
             background-color: #F5F4F0;
           }
 
@@ -262,7 +270,7 @@ const App = () => {
 
           .map-chip {
             position: absolute;
-            top: 10px;
+            bottom: 20px;
             left: 10px;
             background: white;
             padding: 8px 12px;
@@ -272,6 +280,7 @@ const App = () => {
             font-weight: 500;
             z-index: 1000;
           }
+
 
           .search-input {
             width: 100%;

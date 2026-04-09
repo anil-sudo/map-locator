@@ -2,16 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const App = () => {
   const offices = [
-    { name: "London HQ", type: "HQ", lat: 51.5074, lng: -0.1278 },
-    { name: "Paris Branch", type: "Branch", lat: 48.8566, lng: 2.3522 },
-    { name: "Berlin Branch", type: "Branch", lat: 52.5200, lng: 13.4050 },
-    { name: "Amsterdam Branch", type: "Branch", lat: 52.3676, lng: 4.9041 },
-    { name: "Zurich Branch", type: "Branch", lat: 47.3769, lng: 8.5417 },
-    { name: "Milan Branch", type: "Branch", lat: 45.4642, lng: 9.1900 },
-    { name: "Madrid Branch", type: "Branch", lat: 40.4168, lng: -3.7038 },
-    { name: "Vienna Branch", type: "Branch", lat: 48.2082, lng: 16.3738 },
-    { name: "Brussels Branch", type: "Branch", lat: 50.8503, lng: 4.3517 },
-    { name: "Copenhagen Branch", type: "Branch", lat: 55.6761, lng: 12.5683 }
+    { name: "London HQ", type: "HQ", lat: 51.5074, lng: -0.1278, contacts: { address: "1 London Wall, London EC2Y 5AB", phone: "+44 20 1234 5678", email: "london@sc.com" } },
+    { name: "Paris Branch", type: "Branch", lat: 48.8566, lng: 2.3522, contacts: { address: "10 Place Vendôme, 75001 Paris", phone: "+33 1 42 86 00 00", email: "paris@sc.com" } },
+    { name: "Berlin Branch", type: "Branch", lat: 52.5200, lng: 13.4050, contacts: { address: "Unter den Linden 1, 10117 Berlin", phone: "+49 30 12345678", email: "berlin@sc.com" } },
+    { name: "Amsterdam Branch", type: "Branch", lat: 52.3676, lng: 4.9041, contacts: { address: "Beursplein 5, 1012 JW Amsterdam", phone: "+31 20 123 4567", email: "amsterdam@sc.com" } },
+    { name: "Zurich Branch", type: "Branch", lat: 47.3769, lng: 8.5417, contacts: { address: "Bahnhofstrasse 1, 8001 Zurich", phone: "+41 44 123 45 67", email: "zurich@sc.com" } },
+    { name: "Milan Branch", type: "Branch", lat: 45.4642, lng: 9.1900, contacts: { address: "Piazza Duomo, 20122 Milano", phone: "+39 02 1234 5678", email: "milan@sc.com" } },
+    { name: "Madrid Branch", type: "Branch", lat: 40.4168, lng: -3.7038, contacts: { address: "Paseo de la Castellana 1, 28046 Madrid", phone: "+34 91 123 45 67", email: "madrid@sc.com" } },
+    { name: "Vienna Branch", type: "Branch", lat: 48.2082, lng: 16.3738, contacts: { address: "Am Hof 1, 1010 Vienna", phone: "+43 1 12345678", email: "vienna@sc.com" } },
+    { name: "Brussels Branch", type: "Branch", lat: 50.8503, lng: 4.3517, contacts: { address: "Rue de la Loi 1, 1040 Brussels", phone: "+32 2 123 45 67", email: "brussels@sc.com" } },
+    { name: "Copenhagen Branch", type: "Branch", lat: 55.6761, lng: 12.5683, contacts: { address: "Kongens Nytorv 1, 1050 Copenhagen", phone: "+45 33 12 34 56", email: "copenhagen@sc.com" } }
   ];
 
   const useLeaflet = () => {
@@ -126,7 +126,22 @@ const App = () => {
           iconAnchor: office.type === 'HQ' ? [10, 10] : [6, 6]
         });
         const marker = window.L.marker([office.lat, office.lng], { icon }).addTo(map);
-        marker.bindPopup(office.name);
+        
+        const popupContent = `
+          <div style="font-family: 'DM Sans', sans-serif; min-width: 250px; font-size: 14px;">
+            <div style="background: #0A3161; color: white; padding: 10px; font-weight: bold; border-radius: 6px 6px 0 0; font-size: 16px;">
+              ${office.name}
+            </div>
+            <div style="background: white; padding: 12px; border-radius: 0 0 6px 6px; line-height: 1.4;">
+              <div style="margin-bottom: 8px;"><strong>Type:</strong> ${office.type}</div>
+              <div style="margin-bottom: 8px;"><strong>Address:</strong> ${office.contacts.address}</div>
+              <div style="margin-bottom: 8px;"><strong>Phone:</strong> ${office.contacts.phone}</div>
+              <div><strong>Email:</strong> ${office.contacts.email}</div>
+            </div>
+          </div>
+        `;
+        
+        marker.bindPopup(popupContent);
         marker.on('click', () => {
           setHighlightedIndex(officeIndex);
           cardRefs.current[officeIndex]?.scrollIntoView({ behavior: 'smooth', block: 'center' });

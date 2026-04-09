@@ -71,6 +71,7 @@ const App = () => {
   const [visibleCount, setVisibleCount] = useState(4);
   const [userLocation, setUserLocation] = useState(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map' for mobile
 
   const mapRef = useRef(null);
   const markersRef = useRef([]);
@@ -103,8 +104,6 @@ const App = () => {
   useEffect(() => {
     setVisibleCount(4);
   }, [filteredOffices]);
-
-
 
   const visibleOffices = filteredOffices.slice(0, visibleCount);
 
@@ -201,6 +200,30 @@ const App = () => {
     }
   };
 
+  const handleCardClick = (office, globalIndex) => {
+    setHighlightedIndex(globalIndex);
+    const isMobile = window.innerWidth <= 680;
+    
+    if (isMobile) {
+      setViewMode('map');
+    }
+
+    // Use a slightly longer timeout to wait for the CSS transition (0.3s)
+    setTimeout(() => {
+      if (mapRef.current._map) {
+        // Essential: tell Leaflet the container size might have changed
+        mapRef.current._map.invalidateSize();
+        
+        mapRef.current._map.flyTo([office.latitude, office.longitude], 14, {
+          animate: true,
+          duration: 1.5
+        });
+        
+        markersRef.current[globalIndex].openPopup();
+      }
+    }, isMobile ? 350 : 50);
+  };
+
   return (
     <>
       <style>
@@ -211,6 +234,7 @@ const App = () => {
             font-family: 'DM Sans', sans-serif;
             margin: 0;
             padding: 0;
+            overflow: hidden;
           }
 
           .navbar {
@@ -225,40 +249,50 @@ const App = () => {
             font-family: 'DM Serif Display', serif;
             font-size: 1.2em;
             font-weight: 400;
-            min-height: 60px;
+            height: 60px;
             box-sizing: border-box;
             display: flex;
             align-items: center;
+            justify-content: space-between;
+          }
+
+          .nav-title-desktop { display: inline; }
+          .nav-title-mobile { display: none; }
+
+          @media (max-width: 600px) {
+            .nav-title-desktop { display: none; }
+            .nav-title-mobile { display: inline; }
           }
 
           .main-container {
             display: flex;
-            margin-top: 0;
-            padding-top: 70px; /* Increased to account for potential wrapping */
-            height: 100vh;
+            margin-top: 60px;
+            height: calc(100vh - 60px);
             box-sizing: border-box;
             background-color: #F5F4F0;
-          }
-
-          @media (max-width: 680px) {
-            .main-container {
-              flex-direction: column;
-              height: auto;
-            }
-            .sidebar {
-              width: 100% !important;
-              height: 50vh;
-            }
-            .map-container {
-              height: 50vh;
-            }
+            position: relative;
           }
 
           .sidebar {
             width: 360px;
             background-color: #F5F4F0;
-            padding: 20px;
             overflow-y: auto;
+            position: relative;
+            z-index: 5;
+            transition: all 0.3s ease;
+          }
+
+          .sticky-header {
+            position: sticky;
+            top: 0;
+            background-color: #F5F4F0;
+            padding: 20px 20px 10px 20px;
+            z-index: 10;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+          }
+
+          .list-content {
+            padding: 10px 20px 80px 20px;
           }
 
           .map-container {
@@ -266,45 +300,102 @@ const App = () => {
             background-color: #F5F4F0;
             height: 100%;
             position: relative;
+            z-index: 1;
+          }
+
+          .view-toggle {
+            display: none;
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3000;
+            background: #0A3161;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 700;
+            font-size: 0.9em;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            cursor: pointer;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.2s active;
+          }
+
+          .view-toggle:active {
+            transform: translateX(-50%) scale(0.95);
+          }
+
+          @media (max-width: 680px) {
+            .view-toggle { display: flex; }
+            
+            .sidebar {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100% !important;
+              height: 100%;
+              transform: translateX(${viewMode === 'list' ? '0' : '-100%'});
+              visibility: ${viewMode === 'list' ? 'visible' : 'hidden'};
+            }
+
+            .map-container {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              transform: translateX(${viewMode === 'map' ? '0' : '100%'});
+              visibility: ${viewMode === 'map' ? 'visible' : 'hidden'};
+            }
           }
 
           .map-chip {
             position: absolute;
-            bottom: 20px;
-            left: 10px;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
             background: white;
-            padding: 8px 12px;
-            border-radius: 6px;
+            padding: 8px 16px;
+            border-radius: 30px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-            font-size: 0.9em;
-            font-weight: 500;
+            font-size: 0.85em;
+            font-weight: 700;
             z-index: 1000;
+            white-space: nowrap;
           }
-
 
           .search-input {
             width: 100%;
-            padding: 12px;
-            margin-bottom: 20px;
+            padding: 12px 16px;
+            margin-bottom: 15px;
             border: 1px solid #ddd;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 1em;
             box-sizing: border-box;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
           }
 
           .filter-buttons {
-            margin-bottom: 15px;
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            overflow-x: auto;
+            padding-bottom: 5px;
           }
 
           .filter-button {
-            padding: 8px 12px;
-            margin-right: 8px;
+            padding: 8px 16px;
             border: 1px solid #ddd;
             background: white;
             cursor: pointer;
-            border-radius: 4px;
-            font-size: 0.9em;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
             transition: all 0.2s ease;
+            white-space: nowrap;
           }
 
           .filter-button.active {
@@ -313,149 +404,173 @@ const App = () => {
             border-color: #0A3161;
           }
 
-          .filter-button:hover {
-            background: #f8f9fa;
-            border-color: #0A3161;
-          }
-
           .location-button-map {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            padding: 10px 15px;
+            padding: 12px;
             border: none;
-            background: #00A0DC;
-            color: white;
+            background: white;
+            color: #0A3161;
             cursor: pointer;
-            border-radius: 6px;
-            font-size: 0.9em;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             z-index: 1000;
           }
 
-          .result-count {
-            margin-bottom: 15px;
-            font-size: 0.9em;
-            color: #666;
-          }
-
-          .sort-label {
-            margin-bottom: 10px;
-            font-size: 0.85em;
-            color: #0A3161;
-            font-weight: 500;
-          }
-
-          .load-more {
-            display: block;
-            width: 100%;
-            padding: 10px;
-            margin-top: 15px;
-            border: 1px solid #ddd;
-            background: white;
-            cursor: pointer;
-            border-radius: 4px;
-            font-size: 0.9em;
-          }
-
-          .pulsing-marker {
+          .location-icon {
             width: 20px;
             height: 20px;
-            background: teal;
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 0 4px rgba(0,0,0,0.3);
-            animation: pulse 2s infinite;
-          }
-
-          @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); }
+            fill: currentColor;
           }
 
           .office-card {
             background: white;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
             cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+          }
+
+          .office-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
           }
 
           .office-card.highlighted {
-            border-left: 4px solid #0A3161;
+            border-color: #0A3161;
+            background: #f0f7ff;
           }
 
           .office-name {
             font-weight: 700;
             margin-bottom: 8px;
-            font-size: 1.1em;
+            font-size: 1.05em;
+            color: #0A3161;
           }
 
           .badge {
             display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.8em;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75em;
             font-weight: 700;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
           }
 
           .hq { background-color: #0A3161; color: white; }
           .branch { background-color: #28a745; color: white; }
+
+          .pulsing-marker {
+            width: 20px;
+            height: 20px;
+            background: #007bff;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 0 10px rgba(0,123,255,0.5);
+            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+          }
+
+          @keyframes pulse-ring {
+            0% { transform: scale(.95); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 123, 255, 0); }
+            100% { transform: scale(.95); box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); }
+          }
         `}
       </style>
+
       <nav className="navbar">
-        SC | Standard Chartered — Branch Locator Europe ({offices.length} offices)
+        <span className="nav-title-desktop">SC | Standard Chartered — Branch Locator Europe</span>
+        <span className="nav-title-mobile">SC | Branch Locator</span>
+        <span style={{ fontSize: '0.8em', opacity: 0.9 }}>{offices.length} Locations</span>
       </nav>
+
       <div className="main-container">
         <div className="sidebar">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Search offices..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <div className="filter-buttons">
-            <button className={`filter-button ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</button>
-            <button className={`filter-button ${filter === 'branch' ? 'active' : ''}`} onClick={() => setFilter('branch')}>Branch</button>
-            <button className={`filter-button ${filter === 'hq' ? 'active' : ''}`} onClick={() => setFilter('hq')}>HQ</button>
+          <div className="sticky-header">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by city or branch name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <div className="filter-buttons">
+              <button className={`filter-button ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</button>
+              <button className={`filter-button ${filter === 'branch' ? 'active' : ''}`} onClick={() => setFilter('branch')}>Branches</button>
+              <button className={`filter-button ${filter === 'hq' ? 'active' : ''}`} onClick={() => setFilter('hq')}>Headquarters</button>
+            </div>
+            <div style={{ fontSize: '0.85em', color: '#666', marginTop: '5px' }}>
+              Showing {visibleOffices.length} of {filteredOffices.length}
+            </div>
           </div>
-          <div className="result-count">Showing {visibleOffices.length} of {filteredOffices.length}</div>
-          {userLocation && <div className="sort-label">Sorted by distance</div>}
-          {visibleOffices.map((office, index) => {
-            const globalIndex = offices.findIndex(o => o.name === office.name);
-            return (
-              <div key={index} ref={el => cardRefs.current[globalIndex] = el} className={`office-card ${highlightedIndex === globalIndex ? 'highlighted' : ''}`} onClick={() => {
-                setHighlightedIndex(globalIndex);
-                if (mapRef.current._map) {
-                  mapRef.current._map.flyTo([office.latitude, office.longitude], 13);
-                  markersRef.current[globalIndex].openPopup();
-                }
-              }}>
-                <div className="office-name">{office.name}</div>
-                <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>
-                {office.contacts.length > 0 && (
-                  <div style={{ marginTop: '5px', fontSize: '0.85em', color: '#666' }}>
-                    {office.contacts[0].type}: {office.contacts[0].value}
+
+          <div className="list-content">
+            {visibleOffices.map((office, index) => {
+              const globalIndex = offices.findIndex(o => o.name === office.name);
+              return (
+                <div 
+                  key={index} 
+                  ref={el => cardRefs.current[globalIndex] = el} 
+                  className={`office-card ${highlightedIndex === globalIndex ? 'highlighted' : ''}`} 
+                  onClick={() => handleCardClick(office, globalIndex)}
+                >
+                  <div className="office-name">{office.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>
+                    {office.distance && (
+                      <span style={{ fontSize: '0.8em', color: '#666' }}>
+                        • {office.distance.toFixed(1)} km away
+                      </span>
+                    )}
                   </div>
-                )}
-                {office.distance && <div style={{ marginTop: '5px', fontSize: '0.85em', color: '#666' }}>{office.distance.toFixed(1)} km away</div>}
-              </div>
-            );
-          })}
-          {visibleCount < filteredOffices.length && (
-            <button className="load-more" onClick={() => setVisibleCount(prev => Math.min(prev + 4, filteredOffices.length))}>
-              Load more ({filteredOffices.length - visibleCount} remaining)
-            </button>
-          )}
+                  {office.contacts.length > 0 && (
+                    <div style={{ marginTop: '10px', fontSize: '0.85em', color: '#555' }}>
+                      <div style={{ marginBottom: '2px' }}><strong>{office.contacts[0].type}:</strong> {office.contacts[0].value}</div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            
+            {visibleCount < filteredOffices.length && (
+              <button className="load-more" onClick={() => setVisibleCount(prev => Math.min(prev + 4, filteredOffices.length))}>
+                Load more results
+              </button>
+            )}
+          </div>
         </div>
+
         <div className="map-container" ref={mapRef}>
-          <div className="map-chip">Showing {filteredOffices.length} offices</div>
-          <button className="location-button-map" onClick={handleLocationClick}>My Location</button>
+          <div className="map-chip">Map: {filteredOffices.length} Locations</div>
+          <button className="location-button-map" onClick={handleLocationClick} title="Zoom to my location">
+            <svg className="location-icon" viewBox="0 0 24 24">
+              <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+            </svg>
+          </button>
         </div>
+
+        <button className="view-toggle" onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}>
+          {viewMode === 'list' ? (
+            <>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+              View Map
+            </>
+          ) : (
+            <>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+              View List
+            </>
+          )}
+        </button>
       </div>
     </>
   );

@@ -14,6 +14,17 @@ const App = () => {
     { name: "Copenhagen Branch", type: "Branch", lat: 55.6761, lng: 12.5683, contacts: { address: "Kongens Nytorv 1, 1050 Copenhagen", phone: "+45 33 12 34 56", email: "copenhagen@sc.com" } }
   ];
 
+  const haversineDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
   const useLeaflet = () => {
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -62,13 +73,18 @@ const App = () => {
 
   const [visibleCount, setVisibleCount] = useState(4);
 
-  const searchedOffices = offices.filter(office =>
+  const officesWithDistance = userLocation ? offices.map(office => ({
+    ...office,
+    distance: haversineDistance(userLocation.lat, userLocation.lng, office.lat, office.lng)
+  })) : offices;
+
+  const searchedOffices = officesWithDistance.filter(office =>
     office.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
   );
 
   const filteredOffices = searchedOffices.filter(office =>
     filter === 'all' || office.type.toLowerCase() === filter
-  );
+  ).sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
 
   useEffect(() => {
     setVisibleCount(4);
@@ -76,8 +92,41 @@ const App = () => {
 
   const visibleOffices = filteredOffices.slice(0, visibleCount);
 
+  const handleLocationClick = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation({ lat: latitude, lng: longitude });
+          if (mapRef.current._map) {
+            mapRef.current._map.flyTo([latitude, longitude], 13);
+          }
+          // Add user marker
+          if (userMarkerRef.current) {
+            mapRef.current._map.removeLayer(userMarkerRef.current);
+          }
+          const userIcon = window.L.divIcon({
+            html: '<div class="pulsing-marker"></div>',
+            className: 'custom-marker',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+          userMarkerRef.current = window.L.marker([latitude, longitude], { icon: userIcon }).addTo(mapRef.current._map);
+        },
+        (error) => {
+          console.error('Geolocation error:', error);
+          alert('Unable to get your location. Please check your browser settings.');
+        }
+      );
+    } else {
+      alert('Geolocation is not supported by this browser.');
+    }
+  };
+
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const cardRefs = useRef([]);
+  const [userLocation, setUserLocation] = useState(null);
+  const userMarkerRef = useRef(null);
 
   const useLeaflet = () => {
     const [isLoaded, setIsLoaded] = useState(false);
@@ -229,6 +278,23 @@ const App = () => {
             border-color: #0A3161;
           }
 
+          .location-button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            background: #28a745;
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.9em;
+          }
+
+          .location-button:hover {
+            background: #218838;
+          }
+
           .result-count {
             margin-bottom: 15px;
             font-size: 0.9em;
@@ -250,6 +316,28 @@ const App = () => {
           .custom-marker {
             background: none;
             border: none;
+          }
+
+          .pulsing-marker {
+            width: 20px;
+            height: 20px;
+            background: teal;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 4px rgba(0,0,0,0.3);
+            animation: pulse 2s infinite;
+          }
+
+          @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+          }
+
+          .office-distance {
+            margin-top: 5px;
+            font-size: 0.85em;
+            color: #666;
           }
 
           .office-card {
@@ -313,6 +401,7 @@ const App = () => {
             <button className={`filter-button ${filter === 'branch' ? 'active' : ''}`} onClick={() => setFilter('branch')}>Branch</button>
             <button className={`filter-button ${filter === 'hq' ? 'active' : ''}`} onClick={() => setFilter('hq')}>HQ</button>
           </div>
+          <button className="location-button" onClick={handleLocationClick}>My Location</button>
           <div className="result-count">Showing {visibleOffices.length} of {offices.length}</div>
           {visibleOffices.map((office, index) => {
             const globalIndex = offices.findIndex(o => o.name === office.name);
@@ -326,6 +415,7 @@ const App = () => {
               }}>
                 <div className="office-name">{office.name}</div>
                 <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>
+                {office.distance && <div className="office-distance">{office.distance.toFixed(1)} km away</div>}
               </div>
             );
           })}

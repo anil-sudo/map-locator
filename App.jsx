@@ -253,6 +253,20 @@ const App = () => {
             background-color: #F5F4F0;
           }
 
+          @media (max-width: 680px) {
+            .main-container {
+              flex-direction: column;
+              height: auto;
+            }
+            .sidebar {
+              width: 100% !important;
+              height: 50vh;
+            }
+            .map-container {
+              height: 50vh;
+            }
+          }
+
           .sidebar {
             width: 360px;
             background-color: #F5F4F0;
@@ -302,11 +316,17 @@ const App = () => {
             cursor: pointer;
             border-radius: 4px;
             font-size: 0.9em;
+            transition: all 0.2s ease;
           }
 
           .filter-button.active {
             background: #0A3161;
             color: white;
+            border-color: #0A3161;
+          }
+
+          .filter-button:hover {
+            background: #f8f9fa;
             border-color: #0A3161;
           }
 
@@ -321,6 +341,7 @@ const App = () => {
             cursor: pointer;
             border-radius: 4px;
             font-size: 0.9em;
+            transition: all 0.2s ease;
           }
 
           .location-button:hover {
@@ -343,6 +364,12 @@ const App = () => {
             cursor: pointer;
             border-radius: 4px;
             font-size: 0.9em;
+            transition: all 0.2s ease;
+          }
+
+          .load-more:hover {
+            background: #f8f9fa;
+            border-color: #0A3161;
           }
 
           .custom-marker {
@@ -378,7 +405,8 @@ const App = () => {
             padding: 15px;
             margin-bottom: 15px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: box-shadow 0.2s ease;
+            transition: all 0.2s ease;
+            cursor: pointer;
           }
 
           .office-card:hover {
@@ -386,7 +414,7 @@ const App = () => {
           }
 
           .office-card.highlighted {
-            border: 2px solid #0A3161;
+            border-left: 4px solid #0A3161;
           }
 
           .office-name {

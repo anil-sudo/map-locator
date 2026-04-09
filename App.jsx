@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -51,7 +51,6 @@ const App = () => {
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
 
   const mapContainer = useRef(null);
-  const sidebarRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
   const cardRefs = useRef([]);
@@ -528,7 +527,7 @@ const App = () => {
       </nav>
 
       <div className="main-container">
-        <div className="sidebar" ref={sidebarRef}>
+        <div className="sidebar">
           <div className="sticky-header">
             <input
               type="text"

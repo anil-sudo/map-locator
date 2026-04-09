@@ -2,16 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const App = () => {
   const offices = [
-    { name: "London HQ", type: "HQ", lat: 51.5074, lng: -0.1278, contacts: { address: "1 London Wall, London EC2Y 5AB", phone: "+44 20 1234 5678", email: "london@sc.com" } },
-    { name: "Paris Branch", type: "Branch", lat: 48.8566, lng: 2.3522, contacts: { address: "10 Place Vendôme, 75001 Paris", phone: "+33 1 42 86 00 00", email: "paris@sc.com" } },
-    { name: "Berlin Branch", type: "Branch", lat: 52.5200, lng: 13.4050, contacts: { address: "Unter den Linden 1, 10117 Berlin", phone: "+49 30 12345678", email: "berlin@sc.com" } },
-    { name: "Amsterdam Branch", type: "Branch", lat: 52.3676, lng: 4.9041, contacts: { address: "Beursplein 5, 1012 JW Amsterdam", phone: "+31 20 123 4567", email: "amsterdam@sc.com" } },
-    { name: "Zurich Branch", type: "Branch", lat: 47.3769, lng: 8.5417, contacts: { address: "Bahnhofstrasse 1, 8001 Zurich", phone: "+41 44 123 45 67", email: "zurich@sc.com" } },
-    { name: "Milan Branch", type: "Branch", lat: 45.4642, lng: 9.1900, contacts: { address: "Piazza Duomo, 20122 Milano", phone: "+39 02 1234 5678", email: "milan@sc.com" } },
-    { name: "Madrid Branch", type: "Branch", lat: 40.4168, lng: -3.7038, contacts: { address: "Paseo de la Castellana 1, 28046 Madrid", phone: "+34 91 123 45 67", email: "madrid@sc.com" } },
-    { name: "Vienna Branch", type: "Branch", lat: 48.2082, lng: 16.3738, contacts: { address: "Am Hof 1, 1010 Vienna", phone: "+43 1 12345678", email: "vienna@sc.com" } },
-    { name: "Brussels Branch", type: "Branch", lat: 50.8503, lng: 4.3517, contacts: { address: "Rue de la Loi 1, 1040 Brussels", phone: "+32 2 123 45 67", email: "brussels@sc.com" } },
-    { name: "Copenhagen Branch", type: "Branch", lat: 55.6761, lng: 12.5683, contacts: { address: "Kongens Nytorv 1, 1050 Copenhagen", phone: "+45 33 12 34 56", email: "copenhagen@sc.com" } }
+    { name: "Standard Chartered London Head Office", latitude: 51.5074, longitude: -0.1278, type: "HQ", contacts: [{ type: "phone", value: "+44 20 7885 8888" }, { type: "email", value: "london.hq@sc.com" }] },
+    { name: "Standard Chartered London Canary Wharf Branch", latitude: 51.5055, longitude: -0.0235, type: "Branch", contacts: [{ type: "phone", value: "+44 20 7515 5555" }, { type: "email", value: "canarywharf.branch@sc.com" }] },
+    { name: "Standard Chartered Frankfurt Branch", latitude: 50.1109, longitude: 8.6821, type: "Branch", contacts: [{ type: "phone", value: "+49 69 123456" }, { type: "email", value: "frankfurt.branch@sc.com" }] },
+    { name: "Standard Chartered Paris Branch", latitude: 48.8566, longitude: 2.3522, type: "Branch", contacts: [{ type: "phone", value: "+33 1 23456789" }, { type: "email", value: "paris.branch@sc.com" }] },
+    { name: "Standard Chartered Milan Branch", latitude: 45.4642, longitude: 9.19, type: "Branch", contacts: [{ type: "phone", value: "+39 02 1234567" }, { type: "email", value: "milan.branch@sc.com" }] },
+    { name: "Standard Chartered Madrid Branch", latitude: 40.4168, longitude: -3.7038, type: "Branch", contacts: [{ type: "phone", value: "+34 91 1234567" }, { type: "email", value: "madrid.branch@sc.com" }] },
+    { name: "Standard Chartered Amsterdam Branch", latitude: 52.3676, longitude: 4.9041, type: "Branch", contacts: [{ type: "phone", value: "+31 20 1234567" }, { type: "email", value: "amsterdam.branch@sc.com" }] },
+    { name: "Standard Chartered Zurich Branch", latitude: 47.3769, longitude: 8.5417, type: "Branch", contacts: [{ type: "phone", value: "+41 44 1234567" }, { type: "email", value: "zurich.branch@sc.com" }] },
+    { name: "Standard Chartered Vienna Branch", latitude: 48.2082, longitude: 16.3738, type: "Branch", contacts: [{ type: "phone", value: "+43 1 123456" }, { type: "email", value: "vienna.branch@sc.com" }] },
+    { name: "Standard Chartered Brussels Branch", latitude: 50.8503, longitude: 4.3517, type: "Branch", contacts: [{ type: "phone", value: "+32 2 1234567" }, { type: "email", value: "brussels.branch@sc.com" }] }
   ];
 
   const haversineDistance = (lat1, lon1, lat2, lon2) => {
@@ -75,7 +75,7 @@ const App = () => {
 
   const officesWithDistance = userLocation ? offices.map(office => ({
     ...office,
-    distance: haversineDistance(userLocation.lat, userLocation.lng, office.lat, office.lng)
+    distance: haversineDistance(userLocation.lat, userLocation.lng, office.latitude, office.longitude)
   })) : offices;
 
   const searchedOffices = officesWithDistance.filter(office =>
@@ -192,7 +192,7 @@ const App = () => {
           iconSize: office.type === 'HQ' ? [20, 20] : [12, 12],
           iconAnchor: office.type === 'HQ' ? [10, 10] : [6, 6]
         });
-        const marker = window.L.marker([office.lat, office.lng], { icon }).addTo(map);
+        const marker = window.L.marker([office.latitude, office.longitude], { icon }).addTo(map);
         
         const popupContent = `
           <div style="font-family: 'DM Sans', sans-serif; min-width: 250px; font-size: 14px;">
@@ -201,9 +201,7 @@ const App = () => {
             </div>
             <div style="background: white; padding: 12px; border-radius: 0 0 6px 6px; line-height: 1.4;">
               <div style="margin-bottom: 8px;"><strong>Type:</strong> ${office.type}</div>
-              <div style="margin-bottom: 8px;"><strong>Address:</strong> ${office.contacts.address}</div>
-              <div style="margin-bottom: 8px;"><strong>Phone:</strong> ${office.contacts.phone}</div>
-              <div><strong>Email:</strong> ${office.contacts.email}</div>
+              ${office.contacts.map(contact => `<div style="margin-bottom: 4px;"><strong>${contact.type.charAt(0).toUpperCase() + contact.type.slice(1)}:</strong> ${contact.value}</div>`).join('')}
             </div>
           </div>
         `;
@@ -344,6 +342,25 @@ const App = () => {
             transition: all 0.2s ease;
           }
 
+          .location-button-map {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border: none;
+            background: #00A0DC;
+            color: white;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 0.9em;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: all 0.2s ease;
+          }
+
+          .location-button-map:hover {
+            background: #0088B8;
+          }
+
           .location-button:hover {
             background: #218838;
           }
@@ -352,6 +369,13 @@ const App = () => {
             margin-bottom: 15px;
             font-size: 0.9em;
             color: #666;
+          }
+
+          .sort-label {
+            margin-bottom: 10px;
+            font-size: 0.85em;
+            color: #0A3161;
+            font-weight: 500;
           }
 
           .load-more {
@@ -391,6 +415,12 @@ const App = () => {
             0% { transform: scale(1); }
             50% { transform: scale(1.2); }
             100% { transform: scale(1); }
+          }
+
+          .office-contact {
+            margin-top: 5px;
+            font-size: 0.85em;
+            color: #666;
           }
 
           .office-distance {
@@ -445,7 +475,7 @@ const App = () => {
         `}
       </style>
       <nav className="navbar">
-        SC | Standard Chartered — Branch Locator Europe
+        SC | Standard Chartered — Branch Locator Europe ({offices.length} offices)
       </nav>
       <div className="main-container">
         <div className="sidebar">
@@ -461,20 +491,25 @@ const App = () => {
             <button className={`filter-button ${filter === 'branch' ? 'active' : ''}`} onClick={() => setFilter('branch')}>Branch</button>
             <button className={`filter-button ${filter === 'hq' ? 'active' : ''}`} onClick={() => setFilter('hq')}>HQ</button>
           </div>
-          <button className="location-button" onClick={handleLocationClick}>My Location</button>
           <div className="result-count">Showing {visibleOffices.length} of {offices.length}</div>
+          {userLocation && <div className="sort-label">Sorted by distance</div>}
           {visibleOffices.map((office, index) => {
             const globalIndex = offices.findIndex(o => o.name === office.name);
             return (
               <div key={index} ref={el => cardRefs.current[globalIndex] = el} className={`office-card ${highlightedIndex === globalIndex ? 'highlighted' : ''}`} onClick={() => {
                 setHighlightedIndex(globalIndex);
                 if (mapRef.current._map) {
-                  mapRef.current._map.flyTo([office.lat, office.lng], 13);
+                  mapRef.current._map.flyTo([office.latitude, office.longitude], 13);
                   markersRef.current[globalIndex].openPopup();
                 }
               }}>
                 <div className="office-name">{office.name}</div>
                 <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>
+                {office.contacts.length > 0 && (
+                  <div className="office-contact">
+                    {office.contacts[0].type}: {office.contacts[0].value}
+                  </div>
+                )}
                 {office.distance && <div className="office-distance">{office.distance.toFixed(1)} km away</div>}
               </div>
             );
@@ -487,6 +522,7 @@ const App = () => {
         </div>
         <div className="map-container" ref={mapRef}>
           <div className="map-chip">Showing {filteredOffices.length} offices</div>
+          <button className="location-button-map" onClick={handleLocationClick}>My Location</button>
         </div>
       </div>
     </>

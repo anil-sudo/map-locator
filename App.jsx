@@ -35,6 +35,8 @@ const App = () => {
 
   const [filter, setFilter] = useState('all');
 
+  const [visibleCount, setVisibleCount] = useState(4);
+
   const searchedOffices = offices.filter(office =>
     office.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
   );
@@ -42,6 +44,12 @@ const App = () => {
   const filteredOffices = searchedOffices.filter(office =>
     filter === 'all' || office.type.toLowerCase() === filter
   );
+
+  useEffect(() => {
+    setVisibleCount(4);
+  }, [filteredOffices]);
+
+  const visibleOffices = filteredOffices.slice(0, visibleCount);
 
   return (
     <>
@@ -124,6 +132,18 @@ const App = () => {
             color: #666;
           }
 
+          .load-more {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-top: 15px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.9em;
+          }
+
           .office-card {
             background: white;
             border-radius: 8px;
@@ -181,13 +201,18 @@ const App = () => {
             <button className={`filter-button ${filter === 'branch' ? 'active' : ''}`} onClick={() => setFilter('branch')}>Branch</button>
             <button className={`filter-button ${filter === 'hq' ? 'active' : ''}`} onClick={() => setFilter('hq')}>HQ</button>
           </div>
-          <div className="result-count">Showing {filteredOffices.length} of {offices.length}</div>
-          {filteredOffices.map((office, index) => (
+          <div className="result-count">Showing {visibleOffices.length} of {offices.length}</div>
+          {visibleOffices.map((office, index) => (
             <div key={index} className="office-card">
               <div className="office-name">{office.name}</div>
               <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>
             </div>
           ))}
+          {visibleCount < filteredOffices.length && (
+            <button className="load-more" onClick={() => setVisibleCount(prev => Math.min(prev + 4, filteredOffices.length))}>
+              Load more ({filteredOffices.length - visibleCount} remaining)
+            </button>
+          )}
         </div>
         <div className="map-container">
           {/* Right panel content */}

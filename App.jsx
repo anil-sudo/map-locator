@@ -76,6 +76,9 @@ const App = () => {
 
   const visibleOffices = filteredOffices.slice(0, visibleCount);
 
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const cardRefs = useRef([]);
+
   const useLeaflet = () => {
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -112,7 +115,7 @@ const App = () => {
         attribution: '© OpenStreetMap contributors'
       }).addTo(map);
 
-      markersRef.current = offices.map(office => {
+      markersRef.current = offices.map((office, officeIndex) => {
         const iconHtml = office.type === 'HQ' 
           ? '<div style="width: 20px; height: 20px; background: #0A3161; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>'
           : '<div style="width: 12px; height: 12px; background: #28a745; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>';
@@ -122,7 +125,13 @@ const App = () => {
           iconSize: office.type === 'HQ' ? [20, 20] : [12, 12],
           iconAnchor: office.type === 'HQ' ? [10, 10] : [6, 6]
         });
-        return window.L.marker([office.lat, office.lng], { icon }).addTo(map);
+        const marker = window.L.marker([office.lat, office.lng], { icon }).addTo(map);
+        marker.bindPopup(office.name);
+        marker.on('click', () => {
+          setHighlightedIndex(officeIndex);
+          cardRefs.current[officeIndex]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        return marker;
       });
 
       mapRef.current._map = map;
@@ -241,6 +250,10 @@ const App = () => {
             box-shadow: 0 4px 16px rgba(0,0,0,0.15);
           }
 
+          .office-card.highlighted {
+            border: 2px solid #0A3161;
+          }
+
           .office-name {
             font-weight: 700;
             margin-bottom: 8px;
@@ -286,12 +299,21 @@ const App = () => {
             <button className={`filter-button ${filter === 'hq' ? 'active' : ''}`} onClick={() => setFilter('hq')}>HQ</button>
           </div>
           <div className="result-count">Showing {visibleOffices.length} of {offices.length}</div>
-          {visibleOffices.map((office, index) => (
-            <div key={index} className="office-card">
-              <div className="office-name">{office.name}</div>
-              <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>
-            </div>
-          ))}
+          {visibleOffices.map((office, index) => {
+            const globalIndex = offices.findIndex(o => o.name === office.name);
+            return (
+              <div key={index} ref={el => cardRefs.current[globalIndex] = el} className={`office-card ${highlightedIndex === globalIndex ? 'highlighted' : ''}`} onClick={() => {
+                setHighlightedIndex(globalIndex);
+                if (mapRef.current._map) {
+                  mapRef.current._map.flyTo([office.lat, office.lng], 13);
+                  markersRef.current[globalIndex].openPopup();
+                }
+              }}>
+                <div className="office-name">{office.name}</div>
+                <span className={`badge ${office.type.toLowerCase()}`}>{office.type}</span>
+              </div>
+            );
+          })}
           {visibleCount < filteredOffices.length && (
             <button className="load-more" onClick={() => setVisibleCount(prev => Math.min(prev + 4, filteredOffices.length))}>
               Load more ({filteredOffices.length - visibleCount} remaining)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const App = () => {
   const offices = [
@@ -13,6 +13,31 @@ const App = () => {
     { name: "Brussels Branch", type: "Branch" },
     { name: "Copenhagen Branch", type: "Branch" }
   ];
+
+  const useLeaflet = () => {
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    useEffect(() => {
+      if (window.L) {
+        setIsLoaded(true);
+        return;
+      }
+
+      // Load CSS
+      const css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(css);
+
+      // Load JS
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = () => setIsLoaded(true);
+      document.head.appendChild(script);
+    }, []);
+
+    return isLoaded;
+  };
 
   const useDebounce = (value, delay) => {
     const [debouncedValue, setDebouncedValue] = useState(value);
@@ -94,6 +119,7 @@ const App = () => {
           .map-container {
             flex: 1;
             background-color: #F5F4F0;
+            height: 100%;
           }
 
           .search-input {
@@ -214,9 +240,7 @@ const App = () => {
             </button>
           )}
         </div>
-        <div className="map-container">
-          {/* Right panel content */}
-        </div>
+        <div className="map-container" ref={mapRef}></div>
       </div>
     </>
   );

@@ -48,6 +48,7 @@ const App = () => {
   const [visibleCount, setVisibleCount] = useState(4);
   const [userLocation, setUserLocation] = useState(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
 
   const mapContainer = useRef(null);
   const sidebarRef = useRef(null);
@@ -122,17 +123,14 @@ const App = () => {
     };
   }, []);
 
-  const scrollToMap = () => {
-    if (window.innerWidth <= 680) {
-      mapContainer.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Ensure map is correctly sized when switching to map view on mobile
+  useEffect(() => {
+    if (viewMode === 'map' && mapRef.current) {
+      setTimeout(() => {
+        mapRef.current.resize();
+      }, 50);
     }
-  };
-
-  const scrollToSidebar = () => {
-    if (window.innerWidth <= 680) {
-      sidebarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
+  }, [viewMode]);
 
   const openOfficePopup = (office, globalIndex) => {
     if (!mapRef.current) return;
@@ -143,6 +141,9 @@ const App = () => {
     }
 
     setHighlightedIndex(globalIndex);
+    if (window.innerWidth <= 680) {
+      setViewMode('map');
+    }
 
     const popupHTML = `
       <div style="font-family: 'DM Sans', sans-serif; min-width: 220px;">
@@ -207,7 +208,6 @@ const App = () => {
           e.stopPropagation();
           openOfficePopup(office, globalIndex);
           cardRefs.current[globalIndex]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          scrollToMap();
         });
 
         markersRef.current[office.name] = marker;
@@ -254,7 +254,9 @@ const App = () => {
               .setLngLat([longitude, latitude])
               .addTo(mapRef.current);
             
-            scrollToMap();
+            if (window.innerWidth <= 680) {
+              setViewMode('map');
+            }
           }
         },
         (error) => alert('Unable to retrieve location.')
@@ -271,7 +273,6 @@ const App = () => {
         curve: 1.1
       });
       openOfficePopup(office, globalIndex);
-      scrollToMap();
     }
   };
 
@@ -319,7 +320,6 @@ const App = () => {
             overflow-y: auto;
             border-right: 1px solid rgba(0,0,0,0.08);
             z-index: 5;
-            scroll-margin-top: 64px;
           }
 
           .sticky-header {
@@ -427,7 +427,6 @@ const App = () => {
             height: 100%;
             position: relative;
             background: #E5E4DF;
-            scroll-margin-top: 64px;
           }
 
           .location-button {
@@ -489,37 +488,23 @@ const App = () => {
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 160, 220, 0); }
           }
 
-          /* Responsive Stack Layout */
+          /* Mobile View Switcher */
           @media (max-width: 680px) {
-            body {
-              overflow-y: auto;
-            }
             .main-container {
-              flex-direction: column;
-              height: auto;
-              margin-top: 64px;
+              height: calc(100vh - 64px);
             }
             .sidebar {
               width: 100%;
-              height: auto;
-              overflow-y: visible;
               border-right: none;
-              order: 1;
-            }
-            .list-content {
-              padding-bottom: 40px;
+              display: ${viewMode === 'list' ? 'block' : 'none'};
             }
             .map-container {
               width: 100%;
-              height: 500px;
-              order: 2;
+              height: 100%;
+              display: ${viewMode === 'map' ? 'block' : 'none'};
             }
             .back-to-list-button {
               display: flex;
-            }
-            .location-button {
-              bottom: 20px;
-              right: 20px;
             }
           }
 
@@ -613,7 +598,7 @@ const App = () => {
         </div>
 
         <div className="map-container" ref={mapContainer}>
-          <button className="back-to-list-button" onClick={scrollToSidebar}>
+          <button className="back-to-list-button" onClick={() => setViewMode('list')}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="19" y1="12" x2="5" y2="12"></line>
               <polyline points="12 19 5 12 12 5"></polyline>

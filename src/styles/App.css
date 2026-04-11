@@ -1,0 +1,272 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&family=DM+Serif+Display&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  overflow: hidden;
+  background: #F5F4F0;
+}
+
+/* ── Navbar ──────────────────────────────────────────── */
+.navbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 64px;
+  background: #0A3161;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  font-family: 'DM Serif Display', serif;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  z-index: 2000;
+}
+
+.navbar__title {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.navbar__count {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+/* ── Layout ──────────────────────────────────────────── */
+.main-container {
+  display: flex;
+  margin-top: 64px;
+  height: calc(100vh - 64px);
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.sidebar {
+  width: 360px;
+  background: #F5F4F0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  z-index: 5;
+}
+
+.sticky-header {
+  padding: 24px 24px 12px;
+  background: #F5F4F0;
+  backdrop-filter: blur(8px);
+}
+
+/* ── Search ──────────────────────────────────────────── */
+.search-input {
+  width: 100%;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  border: 1px solid #E0DED7;
+  border-radius: 12px;
+  font-size: 15px;
+  background: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #0A3161;
+  box-shadow: 0 0 0 3px rgba(10, 49, 97, 0.1);
+}
+
+/* ── Filter buttons ──────────────────────────────────── */
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+}
+
+.filter-button {
+  padding: 10px 20px;
+  border: 1px solid #E0DED7;
+  background: white;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #555;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.filter-button.active {
+  background: #0A3161;
+  color: white;
+  border-color: #0A3161;
+}
+
+/* ── Result count ────────────────────────────────────── */
+.result-count {
+  font-size: 0.82rem;
+  color: #888;
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+
+/* ── List content ────────────────────────────────────── */
+.list-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 24px 40px;
+}
+
+/* ── Office card ─────────────────────────────────────── */
+.office-card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition:
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s,
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.office-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+.office-card.highlighted {
+  border-color: #00A0DC;
+  background: #F0F9FF;
+}
+
+.office-card__name {
+  font-weight: 700;
+  font-size: 17px;
+  color: #0A3161;
+  line-height: 1.3;
+  margin-bottom: 10px;
+}
+
+.office-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.office-card__contact {
+  margin-top: 14px;
+  font-size: 0.85rem;
+  color: #444;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── Badges ──────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.badge.hq     { background: #0A3161; color: white; }
+.badge.branch { background: #1A6B3C; color: white; }
+
+/* ── Distance ────────────────────────────────────────── */
+.distance-label {
+  font-size: 0.8rem;
+  color: #666;
+  font-weight: 600;
+}
+
+/* ── Infinite scroll sentinel ────────────────────────── */
+.scroll-sentinel {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border: 3px solid #E0DED7;
+  border-top-color: #0A3161;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── Map wrapper ─────────────────────────────────────── */
+.map-wrapper {
+  flex: 1;
+  height: 100%;
+  position: relative;
+}
+
+/* ── Location button ─────────────────────────────────── */
+.location-button {
+  position: absolute;
+  bottom: 32px; right: 32px;
+  width: 52px; height: 52px;
+  background: white;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  color: #0A3161;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.location-button:hover {
+  background: #F0F7FF;
+  transform: scale(1.05);
+}
+
+/* ── Back-to-list button (mobile only) ───────────────── */
+.back-to-list-btn {
+  position: absolute;
+  top: 20px; left: 20px;
+  background: #0A3161;
+  color: white;
+  border: none;
+  border-radius: 30px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 680px) {
+  .sidebar--hidden     { display: none; }
+  .map-wrapper--hidden { display: none; }
+  .back-to-list-btn    { display: flex; }
+}

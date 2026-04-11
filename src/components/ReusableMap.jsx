@@ -1,178 +1,278 @@
-import { useEffect, useRef, useCallback } from 'react';
+/**
+ * ReusableMap
+ * -----------
+ * A fully abstracted MapLibre GL map component. Domain-agnostic by design —
+ * it knows nothing about offices, branches, or contacts. All data-shape
+ * knowledge lives in the consumer (App.jsx) or is injected via renderPopup.
+ *
+ * Props
+ * ─────
+ * @prop {Array}    locations        Required. Array of location objects.
+ *                                   Each must have: { latitude, longitude, id, type? }
+ *                                   Additional fields are passed through to callbacks/renderPopup.
+ * @prop {number}   [highlightedIndex=-1]
+ *                                   Index of the currently highlighted marker.
+ *                                   -1 means no highlight.
+ * @prop {Function} [onMarkerClick]  Called with (locationObject, index) when a marker is clicked.
+ * @prop {Object}   [userLocation]   Optional { lat, lng } for the user's position dot.
+ * @prop {Function} [renderPopup]    (locationObject) => HTML string.
+ *                                   If omitted, a minimal label-only popup is shown.
+ * @prop {Array}    [initialCenter=[10,50]]  [lng, lat] map starting center.
+ * @prop {number}   [initialZoom=4]  Starting zoom level.
+ * @prop {string}   [mapStyle]       MapLibre style URL.
+ * @prop {Object}   [markerColors]   Override default marker colors.
+ *                                   Shape: { default, active, hq, branch, ... }
+ *                                   Any key matching location.type (lowercased) is used.
+ * @prop {string}   [className]      Extra CSS class on the container div.
+ * @prop {Object}   [style]          Inline style overrides on the container div.
+ *
+ * Ref API (via forwardRef + useImperativeHandle)
+ * ──────────────────────────────────────────────
+ * Attach a ref to access imperative methods:
+ *   mapRef.current.flyTo({ center: [lng, lat], zoom: 14 })
+ *   mapRef.current.showPopup([lng, lat], '<p>Hello</p>')
+ *   mapRef.current.closePopup()
+ *   mapRef.current.getMap()   → raw MapLibre Map instance
+ *
+ * Usage Examples
+ * ──────────────
+ * 1. Branch locator (multiple locations):
+ *    <ReusableMap
+ *      locations={branches}
+ *      highlightedIndex={selectedIdx}
+ *      onMarkerClick={(loc, idx) => setSelected(idx)}
+ *      renderPopup={(loc) => `<strong>${loc.name}</strong>`}
+ *    />
+ *
+ * 2. Single user address:
+ *    <ReusableMap
+ *      locations={[{ latitude: 51.5, longitude: -0.1, id: 'home', label: 'My Home' }]}
+ *      initialZoom={14}
+ *    />
+ *
+ * 3. Delivery tracking (custom popup, imperative flyTo):
+ *    const mapRef = useRef();
+ *    <ReusableMap
+ *      ref={mapRef}
+ *      locations={deliveries}
+ *      renderPopup={(d) => `<div>Driver: ${d.driver} — ETA: ${d.eta}</div>`}
+ *    />
+ *    // Later: mapRef.current.flyTo({ center: [lng, lat], zoom: 15 });
+ */
+
+import { useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import '../styles/ReusableMap.css';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_MARKER_COLORS = {
-  hq: '#0A3161',
-  branch: '#1A6B3C',
-  active: '#00A0DC',
+  default: '#555555',
+  active:  '#00A0DC',
+  hq:      '#0A3161',
+  branch:  '#1A6B3C',
 };
 
 const DEFAULT_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 
-const ReusableMap = ({
-  offices = [],
-  highlightedIndex = -1,
-  onMarkerClick,
-  userLocation = null,
-  renderPopup = null,
-  initialCenter = [10, 50],
-  initialZoom = 4,
-  mapStyle = DEFAULT_STYLE,
-  markerColors = {},
-  className = '',
-  style = {},
-}) => {
-  const containerRef     = useRef(null);
-  const mapRef           = useRef(null);
-  const mapReadyRef      = useRef(false);   // true once 'load' fires
-  const markersRef       = useRef({});
-  const popupRef         = useRef(null);
-  const userMarkerRef    = useRef(null);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  // ── Always-current refs so click listeners never go stale ──────────────────
+/**
+ * Returns the fill color for a marker based on its type and active state.
+ * Falls back to colors.default if no type-specific key is found.
+ */
+const resolveMarkerColor = (location, isActive, colors) => {
+  if (isActive) return colors.active;
+  const typeKey = location.type?.toLowerCase();
+  return (typeKey && colors[typeKey]) ? colors[typeKey] : colors.default;
+};
+
+/**
+ * Minimal fallback popup. Renders location.label or location.name.
+ * Intentionally generic — no domain-specific fields assumed.
+ */
+const defaultRenderPopup = (location) => `
+  <div style="font-family:sans-serif;padding:12px 16px;min-width:160px;">
+    <strong style="font-size:14px;">${location.label ?? location.name ?? 'Location'}</strong>
+  </div>
+`;
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+const ReusableMap = forwardRef(function ReusableMap(
+  {
+    locations        = [],
+    highlightedIndex = -1,
+    onMarkerClick,
+    userLocation     = null,
+    renderPopup      = null,
+    initialCenter    = [10, 50],
+    initialZoom      = 4,
+    mapStyle         = DEFAULT_STYLE,
+    markerColors     = {},
+    className        = '',
+    style            = {},
+  },
+  ref
+) {
+  const containerRef    = useRef(null);
+  const mapRef          = useRef(null);
+  const mapReadyRef     = useRef(false);
+  const markersRef      = useRef({});
+  const popupRef        = useRef(null);
+  const userMarkerRef   = useRef(null);
+
+  // Always-current refs — prevent stale closures in event listeners
   const onMarkerClickRef  = useRef(onMarkerClick);
-  const officesRef        = useRef(offices);
+  const locationsRef      = useRef(locations);
   const highlightedRef    = useRef(highlightedIndex);
   const renderPopupRef    = useRef(renderPopup);
 
-  useEffect(() => { onMarkerClickRef.current  = onMarkerClick;    }, [onMarkerClick]);
-  useEffect(() => { officesRef.current        = offices;          }, [offices]);
-  useEffect(() => { highlightedRef.current    = highlightedIndex; }, [highlightedIndex]);
-  useEffect(() => { renderPopupRef.current    = renderPopup;      }, [renderPopup]);
+  useEffect(() => { onMarkerClickRef.current = onMarkerClick;    }, [onMarkerClick]);
+  useEffect(() => { locationsRef.current     = locations;        }, [locations]);
+  useEffect(() => { highlightedRef.current   = highlightedIndex; }, [highlightedIndex]);
+  useEffect(() => { renderPopupRef.current   = renderPopup;      }, [renderPopup]);
 
-  const colors = { ...DEFAULT_MARKER_COLORS, ...markerColors };
+  // Stable merged color map — only recomputes when markerColors prop changes
+  const colors = useMemo(
+    () => ({ ...DEFAULT_MARKER_COLORS, ...markerColors }),
+    [markerColors]
+  );
 
-  // ─── Build popup HTML ───────────────────────────────────────────────────────
-  const buildPopupHTML = (office) => {
-    if (renderPopupRef.current) return renderPopupRef.current(office);
+  // ─── Imperative API (exposed via ref) ──────────────────────────────────────
+  useImperativeHandle(ref, () => ({
+    /** Fly to a position. Accepts any MapLibre flyTo options object. */
+    flyTo: (options) => mapRef.current?.flyTo(options),
 
-    const contactsHTML = (office.contacts || [])
-      .map((c) => `
-        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-          <span style="font-size:13px;">${c.type === 'phone' ? '📞' : '✉️'}</span>
-          <span style="font-size:13px;color:#444;">${c.value}</span>
-        </div>`)
-      .join('');
+    /** Show a popup at [lng, lat] with arbitrary HTML content. */
+    showPopup: ([lng, lat], html) => {
+      if (!mapRef.current) return;
+      popupRef.current?.remove();
+      const popup = new maplibregl.Popup({ offset: 25, closeOnClick: false })
+        .setLngLat([lng, lat])
+        .setHTML(html)
+        .addTo(mapRef.current);
+      popup.on('close', () => { popupRef.current = null; });
+      popupRef.current = popup;
+    },
 
-    return `
-      <div style="font-family:sans-serif;min-width:220px;">
-        <div style="background:#0A3161;color:white;padding:12px;font-weight:bold;
-                    border-radius:8px 8px 0 0;font-size:14px;">${office.name}</div>
-        <div style="background:white;padding:15px;border-radius:0 0 8px 8px;
-                    border:1px solid #eee;border-top:none;">
-          <div style="margin-bottom:10px;">
-            <span style="color:#666;font-size:11px;text-transform:uppercase;
-                         font-weight:bold;display:block;">Office Type</span>
-            <strong>${office.type}</strong>
-          </div>
-          ${contactsHTML}
-        </div>
-      </div>`;
-  };
-
-  // ─── Open popup ─────────────────────────────────────────────────────────────
-  const openPopup = (office) => {
-    if (!mapRef.current) return;
-
-    if (popupRef.current) {
-      popupRef.current.remove();
+    /** Close the currently open popup, if any. */
+    closePopup: () => {
+      popupRef.current?.remove();
       popupRef.current = null;
-    }
+    },
 
+    /** Escape hatch: returns the raw MapLibre Map instance. */
+    getMap: () => mapRef.current,
+  }));
+
+  // ─── Popup helpers ─────────────────────────────────────────────────────────
+
+  const openPopup = useCallback((location) => {
+    if (!mapRef.current) return;
+    popupRef.current?.remove();
+
+    const html = (renderPopupRef.current ?? defaultRenderPopup)(location);
     const popup = new maplibregl.Popup({ offset: 25, closeOnClick: false })
-      .setLngLat([office.longitude, office.latitude])
-      .setHTML(buildPopupHTML(office))
+      .setLngLat([location.longitude, location.latitude])
+      .setHTML(html)
       .addTo(mapRef.current);
 
     popup.on('close', () => { popupRef.current = null; });
     popupRef.current = popup;
-  };
+  }, []);
 
-  // ─── Sync markers: create missing ones, update highlight styles ─────────────
+  // ─── Marker sync ───────────────────────────────────────────────────────────
+
   const syncMarkers = useCallback(() => {
     if (!mapReadyRef.current || !mapRef.current) return;
 
-    const currentOffices = officesRef.current;
+    const currentLocations = locationsRef.current;
     const currentHighlight = highlightedRef.current;
-    const officeNames = new Set(currentOffices.map((o) => o.name));
+    const locationIds = new Set(currentLocations.map((l) => l.id ?? l.name));
 
     // Remove stale markers
-    Object.keys(markersRef.current).forEach((name) => {
-      if (!officeNames.has(name)) {
-        markersRef.current[name].remove();
-        delete markersRef.current[name];
+    Object.keys(markersRef.current).forEach((id) => {
+      if (!locationIds.has(id)) {
+        markersRef.current[id].remove();
+        delete markersRef.current[id];
       }
     });
 
-    // Add new markers / update existing highlight state
-    currentOffices.forEach((office, index) => {
-      if (!markersRef.current[office.name]) {
-        // ── Create marker element ──
+    // Add new markers / update existing ones
+    currentLocations.forEach((location, index) => {
+      const id = location.id ?? location.name;
+      const isActive = currentHighlight === index;
+
+      if (!markersRef.current[id]) {
         const el = document.createElement('div');
         el.className = 'rm-marker';
-        const size = office.type === 'HQ' ? '24px' : '16px';
-        const bg   = office.type === 'HQ' ? colors.hq : colors.branch;
+        const size = location.type === 'HQ' ? '24px' : '16px';
         el.innerHTML = `
-          <div style="width:${size};height:${size};background:${bg};border-radius:50%;
-                      border:2px solid white;box-shadow:0 0 5px rgba(0,0,0,0.3);
-                      transition:all 0.25s ease;cursor:pointer;"></div>`;
+          <div style="
+            width:${size}; height:${size};
+            border-radius:50%;
+            border:2px solid white;
+            box-shadow:0 0 5px rgba(0,0,0,0.3);
+            transition:all 0.25s ease;
+            cursor:pointer;
+          "></div>`;
 
-        // ── Click always reads latest handler + offices via refs ──
+        // Click reads latest handler and locations via refs — never stale
         el.addEventListener('click', (e) => {
           e.stopPropagation();
-          // Read current office list so index is always fresh
-          const latestOffices = officesRef.current;
-          const latestIndex   = latestOffices.findIndex((o) => o.name === office.name);
-          onMarkerClickRef.current?.(office, latestIndex);
+          const latestLocations = locationsRef.current;
+          const latestIndex = latestLocations.findIndex((l) => (l.id ?? l.name) === id);
+          onMarkerClickRef.current?.(location, latestIndex);
         });
 
         const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([office.longitude, office.latitude])
+          .setLngLat([location.longitude, location.latitude])
           .addTo(mapRef.current);
 
-        markersRef.current[office.name] = marker;
+        markersRef.current[id] = marker;
       }
 
-      // ── Update active/inactive style ──
-      const dot = markersRef.current[office.name].getElement().querySelector('div');
-      const isActive = currentHighlight === index;
-
-      dot.style.background  = isActive ? colors.active : office.type === 'HQ' ? colors.hq : colors.branch;
+      // Update visual state (active/inactive)
+      const dot = markersRef.current[id].getElement().querySelector('div');
+      dot.style.background  = resolveMarkerColor(location, isActive, colors);
       dot.style.boxShadow   = isActive ? `0 0 10px ${colors.active}` : '0 0 5px rgba(0,0,0,0.3)';
       dot.style.transform   = isActive ? 'scale(1.25)' : 'scale(1)';
     });
-  }, [colors]); // colors is the only stable dependency needed
+  }, [colors]);
 
-  // ─── Re-sync whenever offices or highlight changes ──────────────────────────
+  // ─── Effects ───────────────────────────────────────────────────────────────
+
+  // Re-sync markers whenever locations or highlighted index changes
   useEffect(() => {
     syncMarkers();
-  }, [offices, highlightedIndex, syncMarkers]);
+  }, [locations, highlightedIndex, syncMarkers]);
 
-  // ─── Popup: open/close when highlightedIndex changes ───────────────────────
+  // Open/close popup when highlighted index changes
   useEffect(() => {
     if (!mapReadyRef.current) return;
-    if (highlightedIndex >= 0 && highlightedIndex < offices.length) {
-      openPopup(offices[highlightedIndex]);
+    if (highlightedIndex >= 0 && highlightedIndex < locations.length) {
+      openPopup(locations[highlightedIndex]);
     } else {
-      if (popupRef.current) { popupRef.current.remove(); popupRef.current = null; }
+      popupRef.current?.remove();
+      popupRef.current = null;
     }
-  }, [highlightedIndex, offices]);
+  }, [highlightedIndex, locations, openPopup]);
 
-  // ─── Fly to highlighted office ──────────────────────────────────────────────
+  // Fly to highlighted location
   useEffect(() => {
     if (!mapReadyRef.current || !mapRef.current) return;
-    if (highlightedIndex >= 0 && highlightedIndex < offices.length) {
-      const { longitude, latitude } = offices[highlightedIndex];
+    if (highlightedIndex >= 0 && highlightedIndex < locations.length) {
+      const { longitude, latitude } = locations[highlightedIndex];
       mapRef.current.flyTo({ center: [longitude, latitude], zoom: 14, speed: 1.2, curve: 1.1 });
     }
-  }, [highlightedIndex, offices]);
+  }, [highlightedIndex, locations]);
 
-  // ─── User location dot ──────────────────────────────────────────────────────
+  // User location dot
   useEffect(() => {
     if (!mapReadyRef.current || !mapRef.current || !userLocation) return;
-
-    if (userMarkerRef.current) userMarkerRef.current.remove();
+    userMarkerRef.current?.remove();
 
     const el = document.createElement('div');
     el.className = 'rm-user-marker';
@@ -184,30 +284,30 @@ const ReusableMap = ({
     mapRef.current.flyTo({ center: [userLocation.lng, userLocation.lat], zoom: 12 });
   }, [userLocation]);
 
-  // ─── Initialize map once ────────────────────────────────────────────────────
+  // Initialize map once on mount
   useEffect(() => {
     if (mapRef.current) return;
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: mapStyle,
-      center: initialCenter,
-      zoom: initialZoom,
+      style:     mapStyle,
+      center:    initialCenter,
+      zoom:      initialZoom,
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
     map.on('load', () => {
-      mapRef.current   = map;
+      mapRef.current      = map;
       mapReadyRef.current = true;
       syncMarkers();
 
-      // Handle any pending highlight that arrived before map was ready
-      const hi = highlightedRef.current;
-      const ofs = officesRef.current;
-      if (hi >= 0 && hi < ofs.length) {
-        openPopup(ofs[hi]);
-        map.flyTo({ center: [ofs[hi].longitude, ofs[hi].latitude], zoom: 14, speed: 1.2, curve: 1.1 });
+      // Handle any highlight that arrived before map was ready
+      const hi   = highlightedRef.current;
+      const locs = locationsRef.current;
+      if (hi >= 0 && hi < locs.length) {
+        openPopup(locs[hi]);
+        map.flyTo({ center: [locs[hi].longitude, locs[hi].latitude], zoom: 14, speed: 1.2, curve: 1.1 });
       }
     });
 
@@ -215,47 +315,25 @@ const ReusableMap = ({
       mapReadyRef.current = false;
       Object.values(markersRef.current).forEach((m) => m.remove());
       markersRef.current = {};
-      if (popupRef.current)    { popupRef.current.remove();    popupRef.current    = null; }
-      if (userMarkerRef.current) { userMarkerRef.current.remove(); userMarkerRef.current = null; }
+      popupRef.current?.remove();
+      popupRef.current = null;
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <>
-      <style>{`
-        .rm-user-marker {
-          width: 20px; height: 20px;
-          background: #00A0DC;
-          border-radius: 50%;
-          border: 4px solid white;
-          box-shadow: 0 0 10px rgba(0,160,220,0.5);
-          pointer-events: none;
-          animation: rm-pulse 2s infinite;
-        }
-        @keyframes rm-pulse {
-          0%   { transform: scale(1);   box-shadow: 0 0 0 0    rgba(0,160,220,0.7); }
-          70%  { transform: scale(1.1); box-shadow: 0 0 0 15px rgba(0,160,220,0);   }
-          100% { transform: scale(1);   box-shadow: 0 0 0 0    rgba(0,160,220,0);   }
-        }
-        .maplibregl-popup-content {
-          padding: 0;
-          border-radius: 12px;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-        }
-        .maplibregl-popup-close-button {
-          top: 10px; right: 10px; color: white; font-size: 18px;
-        }
-      `}</style>
-      <div
-        ref={containerRef}
-        className={className}
-        style={{ width: '100%', height: '100%', ...style }}
-      />
-    </>
+    <div
+      ref={containerRef}
+      className={className}
+      style={{ width: '100%', height: '100%', ...style }}
+    />
   );
-};
+});
 
 export default ReusableMap;

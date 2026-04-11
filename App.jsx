@@ -1,3 +1,9 @@
+<<<<<<< HEAD
+=======
+import { useState, useEffect, useRef, useMemo } from 'react';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+>>>>>>> 94f101eb995c6fd6bca4a98a113f45c0f1bdcc5c
 
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -50,9 +56,18 @@ const App = () => {
   const [selectedName, setSelectedName] = useState(null);
   const [viewMode, setViewMode]         = useState('list');
 
+<<<<<<< HEAD
   const cardRefs    = useRef([]);
   const sidebarRef  = useRef(null);
   const sentinelRef = useRef(null); // ← IntersectionObserver target
+=======
+  const mapContainer = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef({});
+  const cardRefs = useRef([]);
+  const userMarkerRef = useRef(null);
+  const popupRef = useRef(null);
+>>>>>>> 94f101eb995c6fd6bca4a98a113f45c0f1bdcc5c
 
   const debouncedSearch = useDebounce(searchTerm, 220);
 
@@ -247,9 +262,13 @@ const App = () => {
       </nav>
 
       <div className="main-container">
+<<<<<<< HEAD
 
         {/* ── Sidebar ───────────────────────────────────────── */}
         <aside className="sidebar" ref={sidebarRef}>
+=======
+        <div className="sidebar">
+>>>>>>> 94f101eb995c6fd6bca4a98a113f45c0f1bdcc5c
           <div className="sticky-header">
             <input
               type="text"
